@@ -1,5 +1,5 @@
 [package]
-name = "CSE223B"
+name = "cse223_b"
 version = "0.1.0"
 edition = "2021"
 
@@ -15,3 +15,4 @@ solana-program = "1.10.13"
 solana-client = "1.10.13"
 solana-sdk = "1.10.13"
 anyhow = "1.0.40"
+thiserror = "1.0.24"
