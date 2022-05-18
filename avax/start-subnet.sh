@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 [ ! -f ".subnet-cli.pk" ] && subnet-cli create key
 
@@ -10,4 +10,4 @@ subnet-cli wizard \
 --vm-id=koLWBW5foH5NC644EoYFe81PWxYZeBd3CvvgjZAXUGs5XR1Lt \
 --chain-name=cse223b \
 --private-key-path=subnet-cli/.insecure.ewoq.key \
---public-uri=http://localhost:56956
+--public-uri=http://localhost:12782

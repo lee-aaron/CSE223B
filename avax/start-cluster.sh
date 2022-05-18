@@ -1,6 +1,6 @@
 #/bin/bash
 
-AVALANCHEGO_EXEC_PATH="${GOPATH}/avalanchego"
+AVALANCHEGO_EXEC_PATH="${GOPATH}/avalanchego/build/avalanchego"
 
 # takes in an argument that will specify number of nodes to start in cluster
 # default 5
