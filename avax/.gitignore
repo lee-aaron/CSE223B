@@ -1,4 +1,5 @@
 avalanchego*
 cmds/output
 subnet-cli
-*.pk
+spacesvm
+*pk
