@@ -2,27 +2,43 @@
 // It is not expected users directly test with this example. For a more
 // ergonomic example, see `tests/basic-0.js` in this workspace.
 
+const assert = require("assert");
 const anchor = require("@project-serum/anchor");
 
+const idl = JSON.parse(
+  require("fs").readFileSync("./target/idl/anchorapp.json", "utf8")
+);
+const programId = new anchor.web3.PublicKey("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
+
 // Configure the local cluster.
-anchor.setProvider(anchor.AnchorProvider.local());
+const provider = anchor.AnchorProvider.local()
+anchor.setProvider(provider);
 
 async function main() {
-  // #region main
-  // Read the generated IDL.
-  const idl = JSON.parse(
-    require("fs").readFileSync("./target/idl/anchorapp.json", "utf8")
-  );
-
-  // Address of the deployed program.
-  const programId = new anchor.web3.PublicKey("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
-
-  // Generate the program client from IDL.
+  // #region code-simplified
+  // The program to execute.
   const program = new anchor.Program(idl, programId);
 
-  // Execute the RPC.
-  await program.rpc.initialize();
-  // #endregion main
+  // The Account to create.
+  const myAccount = anchor.web3.Keypair.generate();
+
+  // Create the new account and initialize it with the program.
+  // #region code-simplified
+  await program.rpc.initialize(new anchor.BN(1234), {
+    accounts: {
+      myAccount: myAccount.publicKey,
+      user: provider.wallet.publicKey,
+      systemProgram: anchor.web3.SystemProgram.programId,
+    },
+    signers: [myAccount],
+  });
+  // #endregion code-simplified
+
+  // Fetch the newly created account from the cluster.
+  const account = await program.account.myAccount.fetch(myAccount.publicKey);
+
+  // Check it's state was initialized.
+  assert.ok(account.data.eq(new anchor.BN(1234)));
 }
 
 console.log("Running client.");
