@@ -8,7 +8,7 @@ const anchor = require("@project-serum/anchor");
 const idl = JSON.parse(
   require("fs").readFileSync("./target/idl/anchorapp.json", "utf8")
 );
-const programId = new anchor.web3.PublicKey("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
+const programId = new anchor.web3.PublicKey("AB7UQ9XjLKKGYRuqZqb4ZXgVMEs3KpftkNsYLBfKohm3");
 
 // Configure the local cluster.
 const provider = anchor.AnchorProvider.local()
