@@ -20,25 +20,34 @@ async function main() {
   const program = new anchor.Program(idl, programId);
 
   // The Account to create.
-  const myAccount = anchor.web3.Keypair.generate();
+  const mySpace = anchor.web3.Keypair.generate();
 
   // Create the new account and initialize it with the program.
   // #region code-simplified
-  await program.rpc.initialize(new anchor.BN(1234), {
+  await program.rpc.claimSpace(provider.wallet.publicKey, "user", {
     accounts: {
-      myAccount: myAccount.publicKey,
+      mySpace: mySpace.publicKey,
       user: provider.wallet.publicKey,
       systemProgram: anchor.web3.SystemProgram.programId,
     },
-    signers: [myAccount],
+    signers: [mySpace],
+  });
+  await program.rpc.postMessage(provider.wallet.publicKey, "hello there!", {
+    accounts: {
+      mySpace: mySpace.publicKey,
+      user: provider.wallet.publicKey,
+    },
+    signers: [],
   });
   // #endregion code-simplified
 
   // Fetch the newly created account from the cluster.
-  const account = await program.account.myAccount.fetch(myAccount.publicKey);
+  const space = await program.account.space.fetch(mySpace.publicKey);
 
   // Check it's state was initialized.
-  assert.ok(account.data.eq(new anchor.BN(1234)));
+  console.log("Got space name:", space.name);
+  console.log("Got space message:", space.message);
+  // assert.ok(space.data.eq(new anchor.BN(1234)));
 }
 
 console.log("Running client.");
