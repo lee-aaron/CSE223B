@@ -92,6 +92,12 @@ impl Space {
         self.message = message;
         Ok(())
     }
+
+    pub fn delete_message(&mut self, issuer: Pubkey) -> Result<()> {
+        require_keys_eq!(self.owner, issuer, SpaceError::NoPermission);
+        self.message = [0; 256];
+        Ok(())
+    }
 }
 
 #[error_code]
