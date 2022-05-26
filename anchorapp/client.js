@@ -9,6 +9,7 @@ const idl = JSON.parse(
   require("fs").readFileSync("./target/idl/anchorapp.json", "utf8")
 );
 const programId = new anchor.web3.PublicKey("AB7UQ9XjLKKGYRuqZqb4ZXgVMEs3KpftkNsYLBfKohm3");
+// const programId = new anchor.web3.PublicKey("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
 
 // Configure the local cluster.
 const provider = anchor.AnchorProvider.local()
@@ -32,21 +33,29 @@ async function main() {
     },
     signers: [mySpace],
   });
-  await program.rpc.postMessage(provider.wallet.publicKey, "hello there!", {
+
+  console.time('post');
+  await program.rpc.postMessage("hello there!", {
     accounts: {
       mySpace: mySpace.publicKey,
       user: provider.wallet.publicKey,
     },
     signers: [],
   });
+  console.timeEnd('post');
   // #endregion code-simplified
 
-  // Fetch the newly created account from the cluster.
-  const space = await program.account.space.fetch(mySpace.publicKey);
+  console.time('read');
+  let result = await program.rpc.getMessage({
+    accounts: {
+      mySpace: mySpace.publicKey,
+      user: provider.wallet.publicKey,
+    },
+    signers: [],
+  });
+  console.timeEnd('read');
 
-  // Check it's state was initialized.
-  console.log("Got space name:", space.name);
-  console.log("Got space message:", space.message);
+  // console.log(String.fromCharCode(...result));
   // assert.ok(space.data.eq(new anchor.BN(1234)));
 }
 
