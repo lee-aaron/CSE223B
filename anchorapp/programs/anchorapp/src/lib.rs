@@ -3,141 +3,204 @@ use anchor_lang::prelude::*;
 declare_id!("AB7UQ9XjLKKGYRuqZqb4ZXgVMEs3KpftkNsYLBfKohm3");
 // declare_id!("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
 
-const MESSAGE_SIZE: usize = 256;
-const NAME_SIZE: usize = 32;
+const DATA_SIZE: usize = 992;
+const NUM_INODES: usize = 31;
 
 #[program]
 mod anchorapp {
     use super::*;
 
-    pub fn claim_space(ctx: Context<ClaimSpace>, claimer: Pubkey, name: String) -> Result<()> {
-        // Cannot claim for other people
+    // Data block operations
+    pub fn create_data_block(ctx: Context<CreateBlock>, claimer: Pubkey) -> Result<()> {
         require_keys_eq!(ctx.accounts.user.key(), claimer, SpaceError::NoProxyUser);
-
-        // Convert name to array
-        let bytes: &[u8] = name.as_bytes();
-        require_gte!(NAME_SIZE as usize, bytes.len(), SpaceError::NameTooLong);
-        let mut name_bytes: [u8; NAME_SIZE] = [0; NAME_SIZE];
-        name_bytes[..bytes.len()].clone_from_slice(bytes);
-
-        // Try to claim space
-        ctx.accounts.my_space.claim_space(claimer, name_bytes)
+        ctx.accounts.my_space.create_block(claimer, false)
     }
 
-    pub fn post_message(ctx: Context<PostMessage>, message: String) -> Result<()> {
+    pub fn set_data(ctx: Context<SetData>, data: Vec<u8>) -> Result<()> {
         // Get mut space
         let space = &mut ctx.accounts.my_space;
-
         require_keys_eq!(space.owner, ctx.accounts.user.key(), SpaceError::NoPermission);
 
-        // Convert message to array
-        let bytes: &[u8] = message.as_bytes();
-        require_gte!(MESSAGE_SIZE, bytes.len(), SpaceError::MessageTooLong);
-        let mut message_bytes: [u8; MESSAGE_SIZE] = [0; MESSAGE_SIZE];
-        message_bytes[..bytes.len()].clone_from_slice(bytes);
+        // Check size
+        let size = data.len();
+        require_gte!(DATA_SIZE, size, SpaceError::TooMuchData);
 
-        // Try to claim space
-        ctx.accounts.my_space.set_message(message_bytes)
+        // Update data
+        ctx.accounts.my_space.set_data(data)
     }
 
-    pub fn set_name(ctx: Context<SetName>, name: String) -> Result<()> {
+    pub fn get_data(ctx: Context<GetData>) -> Result<Vec<u8>> {
+        ctx.accounts.my_space.get_data()
+    }
+
+    // Inode block operations
+    pub fn create_inode_block(ctx: Context<CreateBlock>, claimer: Pubkey) -> Result<()> {
+        require_keys_eq!(ctx.accounts.user.key(), claimer, SpaceError::NoProxyUser);
+        ctx.accounts.my_space.create_block(claimer, true)
+    }
+
+    pub fn get_direct_blocks(ctx: Context<GetData>) -> Result<Vec<Pubkey>> {
+        ctx.accounts.my_space.get_direct_blocks()
+    }
+
+    pub fn get_next_inode_block(ctx: Context<GetData>) -> Result<Option<Pubkey>> {
+        ctx.accounts.my_space.get_next_inode_block()
+    }
+
+    pub fn set_direct_blocks(ctx: Context<SetData>, data_blocks: Vec<Pubkey>) -> Result<()> {
         // Get mut space
         let space = &mut ctx.accounts.my_space;
-
         require_keys_eq!(space.owner, ctx.accounts.user.key(), SpaceError::NoPermission);
 
-        // Convert message to array
-        let bytes: &[u8] = name.as_bytes();
-        require_gte!(NAME_SIZE, bytes.len(), SpaceError::NameTooLong);
-        let mut name_bytes: [u8; NAME_SIZE] = [0; NAME_SIZE];
-        name_bytes[..bytes.len()].clone_from_slice(bytes);
-
-        // Try to set name
-        ctx.accounts.my_space.set_name(name_bytes)
+        // Check size
+        let size = data_blocks.len();
+        require_gte!(NUM_INODES-1, size, SpaceError::TooManyInodes);
+        ctx.accounts.my_space.set_direct_blocks(data_blocks)
     }
 
-    pub fn get_message(ctx: Context<GetMessage>) -> Result<([u8; MESSAGE_SIZE])> {
-        ctx.accounts.my_space.get_message()
-    }
-    pub fn get_name(ctx: Context<GetName>) -> Result<([u8; NAME_SIZE])> {
-        ctx.accounts.my_space.get_name()
+    pub fn set_next_inode_block(ctx: Context<SetData>, inode: Option<Pubkey>) -> Result<()> {
+        // Get mut space
+        let space = &mut ctx.accounts.my_space;
+        require_keys_eq!(space.owner, ctx.accounts.user.key(), SpaceError::NoPermission);
+        ctx.accounts.my_space.set_next_inode_block(inode)
     }
 }
 
+#[derive(
+    AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq,
+)]
+pub enum Content {
+    DATA { data: [u8; DATA_SIZE]},
+    INODE{ inodes: [Option<Pubkey>; NUM_INODES]},
+}
+
+#[account]
+pub struct Block {
+    pub owner: Pubkey,
+    pub is_inode: bool,         // Take 1 byte
+    pub size: u16,              // Max frame size is 4KB = 2^12
+    pub content: Content,
+}
+
 #[derive(Accounts)]
-pub struct ClaimSpace<'info> {
-    #[account(init, payer = user, space = 8 + Space::MAXIMUM_SIZE)]
-    pub my_space: Account<'info, Space>,
+pub struct CreateBlock<'info> {
+    #[account(init, payer = user, space = 8 + Block::SIZE)]
+    pub my_space: Box<Account<'info, Block>>,
     #[account(mut)]
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>
 }
 
 #[derive(Accounts)]
-pub struct PostMessage<'info> {
+pub struct GetData<'info> {
+    pub my_space: Box<Account<'info, Block>>
+}
+
+#[derive(Accounts)]
+pub struct SetData<'info> {
     #[account(mut)]
-    pub my_space: Account<'info, Space>,
+    pub my_space: Box<Account<'info, Block>>,
     pub user: Signer<'info>
 }
 
-#[derive(Accounts)]
-pub struct SetName<'info> {
-    #[account(mut)]
-    pub my_space: Account<'info, Space>,
-    pub user: Signer<'info>
-}
+impl Block {
+    pub const SIZE: usize = 32 + 1 + 2 + 1+DATA_SIZE + 4;
 
-#[derive(Accounts)]
-pub struct GetMessage<'info> {
-    pub my_space: Account<'info, Space>
-}
-
-#[derive(Accounts)]
-pub struct GetName<'info> {
-    pub my_space: Account<'info, Space>
-}
-
-#[account]
-pub struct Space {
-    pub owner: Pubkey,
-    pub name: [u8; NAME_SIZE],
-    pub message: [u8; MESSAGE_SIZE],
-}
-
-impl Space {
-    pub const MAXIMUM_SIZE: usize = 32 + 1*NAME_SIZE + 1*MESSAGE_SIZE;
-
-    pub fn claim_space(&mut self, owner: Pubkey, name: [u8; NAME_SIZE]) -> Result<()> {
-        // Space already claimed - already checked by account
-
-        // Otherwise, claim space and initialize
+    pub fn create_block(&mut self, owner: Pubkey, is_inode: bool) -> Result<()> {
         self.owner = owner;
-        self.name = name;
-        self.message = [0; MESSAGE_SIZE];
+        self.size = 0;
+        self.is_inode = is_inode;
+        if is_inode {
+            self.content = Content::INODE{inodes: [None; NUM_INODES]};
+        } else {
+            self.content = Content::DATA{data: [0; DATA_SIZE]};
+        }
+        Ok(())
+    }
+
+    pub fn get_data(&self) -> Result<Vec<u8>> {
+        require!(!self.is_inode, SpaceError::NotDataBlock);
+        let mut result = vec!();
+
+        if let Content::DATA{data} = self.content {
+            result = data[..self.size as usize].to_vec();
+        }
+
+        Ok(result)
+    }
+
+    pub fn set_data(&mut self, new_data: Vec<u8>) -> Result<()> {
+        require!(!self.is_inode, SpaceError::NotDataBlock);
+        require_gte!(DATA_SIZE, new_data.len(), SpaceError::TooMuchData);
+
+        if let Content::DATA{data: _} = self.content {
+            let mut result = [0; DATA_SIZE];
+            result[..new_data.len()].clone_from_slice(&new_data[..]);
+            self.content = Content::DATA{data: result};
+            self.size = new_data.len() as u16;
+        }
 
         Ok(())
     }
 
-    pub fn get_name(&self) -> Result<[u8; NAME_SIZE]> {
-        Ok(self.name.clone())
+    pub fn get_direct_blocks(&self) -> Result<Vec<Pubkey>> {
+        require!(self.is_inode, SpaceError::NotInodeBlock);
+
+        let mut result = vec!();
+        if let Content::INODE{inodes} = self.content {
+            let temp: Vec<Pubkey> = inodes[1..]
+                .into_iter()
+                .filter(|b| b.is_some())
+                .map(|b| b.unwrap())
+                .collect();
+            result = temp.to_vec();
+        }
+
+        Ok(result)
     }
 
-    pub fn get_message(&self) -> Result<[u8; MESSAGE_SIZE]> {
-        Ok(self.message.clone())
+    pub fn get_next_inode_block(&self) -> Result<Option<Pubkey>> {
+        require!(self.is_inode, SpaceError::NotInodeBlock);
+
+        let mut result: Option<Pubkey> = None;
+        if let Content::INODE{inodes} = self.content {
+            result = inodes[0];
+        }
+
+        Ok(result)
     }
 
-    pub fn set_name(&mut self, name: [u8; NAME_SIZE]) -> Result<()> {
-        self.name = name;
+    pub fn set_direct_blocks(&mut self, new_inodes: Vec<Pubkey>) -> Result<()> {
+        require!(self.is_inode, SpaceError::NotInodeBlock);
+        require_gte!(NUM_INODES-1, new_inodes.len(), SpaceError::TooManyInodes);
+
+        if let Content::INODE{inodes} = self.content {
+            let mut result = [None; NUM_INODES];
+            let temp: Vec<Option<Pubkey>> = new_inodes
+                .into_iter()
+                .map(|b| Some(b))
+                .collect();
+            self.size = (temp.len()+1) as u16;
+            
+            // preserve next block pointer
+            result[0] = inodes[0];
+            result[1..self.size as usize].clone_from_slice(&temp);
+
+            self.content = Content::INODE{inodes: result};
+        }
+
         Ok(())
     }
 
-    pub fn set_message(&mut self, message: [u8; MESSAGE_SIZE]) -> Result<()> {
-        self.message = message;
-        Ok(())
-    }
+    pub fn set_next_inode_block(&mut self, inode: Option<Pubkey>) -> Result<()> {
+        require!(self.is_inode, SpaceError::NotInodeBlock);
 
-    pub fn delete_message(&mut self) -> Result<()> {
-        self.message = [0; MESSAGE_SIZE];
+        if let Content::INODE{inodes} = self.content {
+            let mut new_inodes = inodes.clone();
+            new_inodes[0] = inode;
+            self.content = Content::INODE{inodes: new_inodes};
+        }
+
         Ok(())
     }
 }
@@ -145,7 +208,9 @@ impl Space {
 #[error_code]
 pub enum SpaceError {
     NoPermission,
-    NameTooLong,
-    MessageTooLong,
+    TooMuchData,
+    TooManyInodes,
     NoProxyUser,
+    NotDataBlock,
+    NotInodeBlock,
 }
