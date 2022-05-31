@@ -28,7 +28,7 @@ describe("anchorapp", () => {
 
     let data = await util.readData(dataKeyPair.publicKey);
     // array.forEach((e, i) => chai.expect(e).to.equal(data[i]));
-    chai.expect(data).to.deep.equal(Array.from(array));
+    chai.expect(data).to.deep.equal(array);
 
     // let state = await program.account.block.fetch(dataKeyPair.publicKey);
     // chai.expect(!state.isInode);
@@ -49,7 +49,7 @@ describe("anchorapp", () => {
     // Update message
     let accounts = Array(3).fill(anchor.web3.Keypair.generate().publicKey);
     let inode = {direct: accounts, next: null};
-    await util.setInodes(dataKeyPair, claimer.publicKey, inode);
+    await util.setInode(dataKeyPair, claimer.publicKey, inode);
 
     let result = await util.readInode(dataKeyPair.publicKey);
     chai.expect(result).to.deep.equal(inode);
@@ -64,78 +64,20 @@ describe("anchorapp", () => {
     // inodes = inodes['inodes'];
     // accounts.forEach((e, i) => chai.expect(e).to.deep.equal(inodes[i]));
   });
+  
+  it("set next inode and direct blocks", async () => {
+    const dataKeyPair = anchor.web3.Keypair.generate();
+    const claimer = (program.provider as anchor.AnchorProvider).wallet;
 
-  // it("store a file", async () => {
-  //   const spaceKeyPair = anchor.web3.Keypair.generate();
-  //   const owner = (program.provider as anchor.AnchorProvider).wallet;
-  //   const fileContent = 
+    // Claim space
+    await util.createInodeBlock(dataKeyPair, claimer.publicKey);
+    
+    // Update message
+    let accounts = Array(30).fill(anchor.web3.Keypair.generate().publicKey);
+    let inode = {direct: accounts, next: anchor.web3.Keypair.generate().publicKey};
+    await util.setInode(dataKeyPair, claimer.publicKey, inode);
 
-  //   // Claim space
-  //   await program.methods
-  //     .claimSpace(claimer1.publicKey, "user")
-  //     .accounts({
-  //       mySpace: spaceKeyPair.publicKey,
-  //       user: claimer1.publicKey,
-  //     })
-  //     .signers([spaceKeyPair])
-  //     .rpc();
-    
-  //   // Write some content
-  //   await program.methods
-  //     .postMessage("hello there!")
-  //     .accounts({
-  //       mySpace: spaceKeyPair.publicKey,
-  //       user: claimer1.publicKey,
-  //     })
-  //     .signers([])
-  //     .rpc();
-    
-  //   // Write again to the space
-  //   chai.expect(program.methods
-  //     .postMessage("hello there!")
-  //     .accounts({
-  //       mySpace: spaceKeyPair.publicKey,
-  //       user: claimer2.publicKey,
-  //     })
-  //     .signers([])
-  //     .rpc()).to.be.rejectedWith("Error");
-  // });
-
-  // it("time test", async () => {
-  //   const spaceKeyPair = anchor.web3.Keypair.generate();
-  //   const claimer = (program.provider as anchor.AnchorProvider).wallet;
-
-  //   // Claim space
-  //   await program.methods
-  //     .claimSpace(claimer.publicKey, "user")
-  //     .accounts({
-  //       mySpace: spaceKeyPair.publicKey,
-  //       user: claimer.publicKey,
-  //     })
-  //     .signers([spaceKeyPair])
-  //     .rpc();
-    
-    // Write some content
-    // console.time("write");
-    // await program.methods
-    //   .postMessage("hello there!")
-    //   .accounts({
-    //     mySpace: spaceKeyPair.publicKey,
-    //     user: claimer.publicKey,
-    //   })
-    //   .signers([])
-    //   .rpc();
-    // console.timeEnd("write");
-    
-    // Get message
-    // console.time("read");
-    // await program.methods
-    //   .getMessage()
-    //   .accounts({
-    //     mySpace: spaceKeyPair.publicKey,
-    //   })
-    //   .signers([])
-    //   .rpc();
-    // console.timeEnd("read");
-  // });
+    let result = await util.readInode(dataKeyPair.publicKey);
+    chai.expect(result).to.deep.equal(inode);
+  });
 });

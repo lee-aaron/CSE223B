@@ -87,7 +87,7 @@ pub struct SetData<'info> {
 }
 
 impl Block {
-    pub const SIZE: usize = 32 + 1 + 2 + (1+DATA_SIZE) + 20;
+    pub const SIZE: usize = 32 + 1 + 2 + (1 + (1+32)*NUM_INODES);
 
     pub fn create_block(&mut self, owner: Pubkey, is_inode: bool) -> Result<()> {
         self.owner = owner;
@@ -141,8 +141,9 @@ impl Block {
         require!(self.is_inode, SpaceError::NotInodeBlock);
 
         if let Content::INODE{inodes} = self.content {
-            let mut new_inodes = inodes.clone();
+            let mut new_inodes = [None; NUM_INODES];
             new_inodes[0] = inode;
+            new_inodes[1..NUM_INODES].clone_from_slice(&inodes[1..]);
             self.content = Content::INODE{inodes: new_inodes};
         }
 

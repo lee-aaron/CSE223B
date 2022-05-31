@@ -1,7 +1,7 @@
 import * as anchor from "@project-serum/anchor";
 import { Program } from "@project-serum/anchor";
 import { Anchorapp } from "../target/types/anchorapp";
-import { readFileSync, writeFileSync } from 'fs';
+import * as fs from 'fs';
 
 let program = anchor.workspace.Anchorapp as Program<Anchorapp>;
 
@@ -33,8 +33,10 @@ export async function readData(datakey: PubKey): Promise<Uint8Array> {
 
   let rawData: Uint8Array = state.content['data']['data'];
   let size: number = state.size;
-  // console.log("Read data size:", size);
-  return rawData.slice(0, size);
+  let result = new Uint8Array(size);
+  result.set(rawData.slice(0, size), 0);
+  // console.log("Read data size:", size, result.buffer);
+  return result;
 }
 
 export async function createDataBlock(blockKey: KeyPair, userKey: PubKey, data?: Buffer) {
@@ -73,11 +75,11 @@ export async function createInodeBlock(blockKey: KeyPair, userKey: PubKey, inode
     .signers([blockKey])
     .rpc();
   if (inode !== undefined) {
-    await setInodes(blockKey, userKey, inode);
+    await setInode(blockKey, userKey, inode);
   }
 }
 
-export async function setInodes(blockKey: KeyPair, userKey: PubKey, inode: Inode) {
+export async function setInode(blockKey: KeyPair, userKey: PubKey, inode: Inode) {
   await program.methods
     .setDirectBlocks(inode.direct)
     .accounts({
@@ -96,65 +98,105 @@ export async function setInodes(blockKey: KeyPair, userKey: PubKey, inode: Inode
     .rpc();
 }
 
-export async function uploadFile(filePath: string, userKey: PubKey): Promise<PubKey> {
-  let result: string = readFileSync(filePath, 'utf-8');
-  let encoder = new TextEncoder();
-  let bytes: Uint8Array = encoder.encode(result);
+function readBuffer(fd: number): Promise<Buffer> {
+  return new Promise(function(ok, notOk) {
+    var buffer = Buffer.alloc(DATA_SIZE);
+    fs.read(
+      fd, 
+      buffer,
+      0,
+      buffer.length,
+      null,
+      (err, bytesRead, buffer) => {
+          if(err) return notOk(err);
+          // Truncate buffer to fit
+          var result = Buffer.alloc(bytesRead);
+          result.set(buffer.subarray(0, bytesRead), 0);
+          ok(result);
+      }
+  );
+  })
+}
 
-  // Write data first
+function writeBuffer(fd: number, buffer: Buffer): Promise<void> {
+  return new Promise(function(ok, notOk) {
+    fs.write(
+      fd, 
+      buffer,
+      0,
+      buffer.length,
+      null,
+      (err, bytesWritten, buffer) => {
+          if(err) return notOk(err);
+          ok();
+      }
+  );
+  })
+}
+
+export async function uploadFile(filePath: string, userKey: PubKey): Promise<PubKey> {
+  let fd = fs.openSync(filePath, 'r');
+
   var blockKeys: PubKey[] = [];
-  var bufferIndex = 0;
-  for(var i = 0; i < bytes.length; i += DATA_SIZE) {
+  var bytesWritten = 0;
+  while(true) {
     var blockKey = anchor.web3.Keypair.generate();
-    var writeSize = Math.min(bufferIndex+DATA_SIZE, bytes.length)-bufferIndex;
-    var chunk = new Uint8Array(writeSize);
-    chunk.set(bytes.subarray(bufferIndex, bufferIndex+writeSize), 0);
+    var chunk = await readBuffer(fd);
+
+    // End of file reached
+    if(chunk.length === 0) break;
+
     // console.log("Attempt to write", chunk.length, "bytes...");
+    process.stdout.write(".");
     await createDataBlock(blockKey, userKey, Buffer.from(chunk.buffer));
-    bufferIndex += writeSize;
+    bytesWritten += chunk.length;
 
     // Add block pair
     blockKeys.push(blockKey.publicKey);
   }
+  fs.closeSync(fd);
+
+  if(blockKeys.length === 0) throw RangeError("Empty file");
 
   // Then write inodes
   var headInodeKey: PubKey = null;
+  var currInodeKey: KeyPair = anchor.web3.Keypair.generate();
   for(var i = 0; i < blockKeys.length; i += NUM_INODES-1) {
-    var nextInodeKey = null;
+    var nextInodeKey: KeyPair = null;
     if(i + NUM_INODES-1 < blockKeys.length) nextInodeKey = anchor.web3.Keypair.generate();
 
     var inode = {
       direct: blockKeys.slice(i, Math.min(i+NUM_INODES-1, blockKeys.length)),
-      next: nextInodeKey,
+      next: nextInodeKey == null? null:nextInodeKey.publicKey,
     };
-    var currInodeKey = anchor.web3.Keypair.generate();
-    console.log("Attempt to write inode", inode);
+    // console.log("Attempt to write inode", inode);
     await createInodeBlock(currInodeKey, userKey, inode);
 
     if(headInodeKey === null) headInodeKey = currInodeKey.publicKey;
+    currInodeKey = nextInodeKey;
   }
 
-  console.log("Write size:", bufferIndex);
+  console.log("Write size:", bytesWritten);
   return headInodeKey;
 }
 
 export async function downloadFile(filePath: string, inodeKey: PubKey) {
+  let fd = fs.openSync(filePath, 'w');
+
   let currInode = await readInode(inodeKey);
-  let buffer: Uint8Array = new Uint8Array(0);
 
-  var size = 0;
+  var bytesRead = 0;
   while(currInode !== null) {
-    // Copy & preallocate buffer
-    var newBuffer = new Uint8Array(size + currInode.direct.length*DATA_SIZE);
-    newBuffer.set(buffer, 0);
-    buffer = newBuffer;
-
     // Read current inode data
     for(var i = 0; i < currInode.direct.length; i++) {
       // console.log("Reading data from inode:", currInode.direct[i]);
-      var data = await readData(currInode.direct[i]);
-      buffer.set(data, size);
-      size += data.length;
+      var data: Uint8Array = await readData(currInode.direct[i]);
+      // console.log("Read data:", data.length);
+      process.stdout.write(".");
+
+      // Write data to file
+      await writeBuffer(fd, Buffer.from(data.buffer));
+      bytesRead += data.length;
     }
 
     // Go to next inode
@@ -162,13 +204,7 @@ export async function downloadFile(filePath: string, inodeKey: PubKey) {
     currInode = await readInode(currInode.next);
   }
 
-  // Truncate unused buffer
-  var newBuffer = new Uint8Array(size);
-  newBuffer.set(buffer.subarray(0, size), 0);
-  buffer = newBuffer;
-
-  // Write data to file
-  let decoder = new TextDecoder();
-  console.log("Read size:", buffer.length);
-  writeFileSync(filePath, decoder.decode(buffer));
+  // Close and report
+  console.log("Read size:", bytesRead);
+  fs.closeSync(fd);
 }

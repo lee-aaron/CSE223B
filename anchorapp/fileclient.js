@@ -38,5 +38,25 @@ async function main() {
 // Read size: 24577
 // download: 29.71ms
 
+// Write size: 4229
+// upload: 5.360s
+// Read size: 4229
+// download: 16.11ms
+
+// Write size: 12135
+// upload: 11.986s
+// Read size: 12135
+// download: 27.925ms
+
+// Write size: 29966
+// upload: 28.325s
+// Read size: 29966
+// download: 58.115ms
+
+// Write size: 49155
+// upload: 43.969s
+// Read size: 49155
+// download: 72.555ms
+
 console.log("Running client.");
 main().then(() => console.log("Success"));

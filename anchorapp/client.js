@@ -28,11 +28,12 @@ async function main() {
   await util.createInodeBlock(dataKeyPair, claimer.publicKey);
   
   // Update message
-  let accounts = Array(5).fill(anchor.web3.Keypair.generate().publicKey);
-  let inode = {direct: accounts, next: null};
-  await util.setInodes(dataKeyPair, claimer.publicKey, inode);
+  let accounts = new Array(30);
+  accounts.fill(anchor.web3.Keypair.generate().publicKey, 0, accounts.length);
+  let inode = {direct: accounts, next: anchor.web3.Keypair.generate().publicKey};
+  await util.setInode(dataKeyPair, claimer.publicKey, inode);
 
-  let result = await util.readInodes(dataKeyPair);
+  let result = await util.readInode(dataKeyPair.publicKey);
   console.log(result);
 }
 

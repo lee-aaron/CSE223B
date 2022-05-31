@@ -37,7 +37,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 exports.__esModule = true;
 var anchor = require("@project-serum/anchor");
-var fs_1 = require("fs");
+var fs = require("fs");
 var program = anchor.workspace.Anchorapp;
 var DATA_SIZE = 992;
 var NUM_INODES = 31;
@@ -63,7 +63,7 @@ function readInode(inodeKey) {
 exports.readInode = readInode;
 function readData(datakey) {
     return __awaiter(this, void 0, void 0, function () {
-        var state, rawData, size;
+        var state, rawData, size, result;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0: return [4 /*yield*/, program.account.block.fetch(datakey)];
@@ -73,8 +73,10 @@ function readData(datakey) {
                         throw new TypeError("Not a data block");
                     rawData = state.content['data']['data'];
                     size = state.size;
-                    // console.log("Read data size:", size);
-                    return [2 /*return*/, rawData.slice(0, size)];
+                    result = new Uint8Array(size);
+                    result.set(rawData.slice(0, size), 0);
+                    // console.log("Read data size:", size, result.buffer);
+                    return [2 /*return*/, result];
             }
         });
     });
@@ -140,7 +142,7 @@ function createInodeBlock(blockKey, userKey, inode) {
                 case 1:
                     _a.sent();
                     if (!(inode !== undefined)) return [3 /*break*/, 3];
-                    return [4 /*yield*/, setInodes(blockKey, userKey, inode)];
+                    return [4 /*yield*/, setInode(blockKey, userKey, inode)];
                 case 2:
                     _a.sent();
                     _a.label = 3;
@@ -150,7 +152,7 @@ function createInodeBlock(blockKey, userKey, inode) {
     });
 }
 exports.createInodeBlock = createInodeBlock;
-function setInodes(blockKey, userKey, inode) {
+function setInode(blockKey, userKey, inode) {
     return __awaiter(this, void 0, void 0, function () {
         return __generator(this, function (_a) {
             switch (_a.label) {
@@ -179,40 +181,63 @@ function setInodes(blockKey, userKey, inode) {
         });
     });
 }
-exports.setInodes = setInodes;
+exports.setInode = setInode;
+function readBuffer(fd) {
+    return new Promise(function (ok, notOk) {
+        var buffer = Buffer.alloc(DATA_SIZE);
+        fs.read(fd, buffer, 0, buffer.length, null, function (err, bytesRead, buffer) {
+            if (err)
+                return notOk(err);
+            // Truncate buffer to fit
+            var result = Buffer.alloc(bytesRead);
+            result.set(buffer.subarray(0, bytesRead), 0);
+            ok(result);
+        });
+    });
+}
+function writeBuffer(fd, buffer) {
+    return new Promise(function (ok, notOk) {
+        fs.write(fd, buffer, 0, buffer.length, null, function (err, bytesWritten, buffer) {
+            if (err)
+                return notOk(err);
+            ok();
+        });
+    });
+}
 function uploadFile(filePath, userKey) {
     return __awaiter(this, void 0, void 0, function () {
-        var result, encoder, bytes, blockKeys, bufferIndex, i, blockKey, writeSize, chunk, headInodeKey, i, nextInodeKey, inode, currInodeKey;
+        var fd, blockKeys, bytesWritten, blockKey, chunk, headInodeKey, currInodeKey, i, nextInodeKey, inode;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    result = fs_1.readFileSync(filePath, 'utf-8');
-                    encoder = new TextEncoder();
-                    bytes = encoder.encode(result);
+                    fd = fs.openSync(filePath, 'r');
                     blockKeys = [];
-                    bufferIndex = 0;
-                    i = 0;
+                    bytesWritten = 0;
                     _a.label = 1;
                 case 1:
-                    if (!(i < bytes.length)) return [3 /*break*/, 4];
+                    if (!true) return [3 /*break*/, 4];
                     blockKey = anchor.web3.Keypair.generate();
-                    writeSize = Math.min(bufferIndex + DATA_SIZE, bytes.length) - bufferIndex;
-                    chunk = new Uint8Array(writeSize);
-                    chunk.set(bytes.subarray(bufferIndex, bufferIndex + writeSize), 0);
-                    // console.log("Attempt to write", chunk.length, "bytes...");
-                    return [4 /*yield*/, createDataBlock(blockKey, userKey, Buffer.from(chunk.buffer))];
+                    return [4 /*yield*/, readBuffer(fd)];
                 case 2:
+                    chunk = _a.sent();
+                    // End of file reached
+                    if (chunk.length === 0)
+                        return [3 /*break*/, 4];
                     // console.log("Attempt to write", chunk.length, "bytes...");
+                    process.stdout.write(".");
+                    return [4 /*yield*/, createDataBlock(blockKey, userKey, Buffer.from(chunk.buffer))];
+                case 3:
                     _a.sent();
-                    bufferIndex += writeSize;
+                    bytesWritten += chunk.length;
                     // Add block pair
                     blockKeys.push(blockKey.publicKey);
-                    _a.label = 3;
-                case 3:
-                    i += DATA_SIZE;
                     return [3 /*break*/, 1];
                 case 4:
+                    fs.closeSync(fd);
+                    if (blockKeys.length === 0)
+                        throw RangeError("Empty file");
                     headInodeKey = null;
+                    currInodeKey = anchor.web3.Keypair.generate();
                     i = 0;
                     _a.label = 5;
                 case 5:
@@ -222,21 +247,22 @@ function uploadFile(filePath, userKey) {
                         nextInodeKey = anchor.web3.Keypair.generate();
                     inode = {
                         direct: blockKeys.slice(i, Math.min(i + NUM_INODES - 1, blockKeys.length)),
-                        next: nextInodeKey
+                        next: nextInodeKey == null ? null : nextInodeKey.publicKey
                     };
-                    currInodeKey = anchor.web3.Keypair.generate();
-                    console.log("Attempt to write inode", inode);
+                    // console.log("Attempt to write inode", inode);
                     return [4 /*yield*/, createInodeBlock(currInodeKey, userKey, inode)];
                 case 6:
+                    // console.log("Attempt to write inode", inode);
                     _a.sent();
                     if (headInodeKey === null)
                         headInodeKey = currInodeKey.publicKey;
+                    currInodeKey = nextInodeKey;
                     _a.label = 7;
                 case 7:
                     i += NUM_INODES - 1;
                     return [3 /*break*/, 5];
                 case 8:
-                    console.log("Write size:", bufferIndex);
+                    console.log("Write size:", bytesWritten);
                     return [2 /*return*/, headInodeKey];
             }
         });
@@ -245,48 +271,49 @@ function uploadFile(filePath, userKey) {
 exports.uploadFile = uploadFile;
 function downloadFile(filePath, inodeKey) {
     return __awaiter(this, void 0, void 0, function () {
-        var currInode, buffer, size, newBuffer, i, data, newBuffer, decoder;
+        var fd, currInode, bytesRead, i, data;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, readInode(inodeKey)];
+                case 0:
+                    fd = fs.openSync(filePath, 'w');
+                    return [4 /*yield*/, readInode(inodeKey)];
                 case 1:
                     currInode = _a.sent();
-                    buffer = new Uint8Array(0);
-                    size = 0;
+                    bytesRead = 0;
                     _a.label = 2;
                 case 2:
-                    if (!(currInode !== null)) return [3 /*break*/, 8];
-                    newBuffer = new Uint8Array(size + currInode.direct.length * DATA_SIZE);
-                    newBuffer.set(buffer, 0);
-                    buffer = newBuffer;
+                    if (!(currInode !== null)) return [3 /*break*/, 9];
                     i = 0;
                     _a.label = 3;
                 case 3:
-                    if (!(i < currInode.direct.length)) return [3 /*break*/, 6];
+                    if (!(i < currInode.direct.length)) return [3 /*break*/, 7];
                     return [4 /*yield*/, readData(currInode.direct[i])];
                 case 4:
                     data = _a.sent();
-                    buffer.set(data, size);
-                    size += data.length;
-                    _a.label = 5;
+                    // console.log("Read data:", data.length);
+                    process.stdout.write(".");
+                    // Write data to file
+                    return [4 /*yield*/, writeBuffer(fd, Buffer.from(data.buffer))];
                 case 5:
+                    // Write data to file
+                    _a.sent();
+                    bytesRead += data.length;
+                    _a.label = 6;
+                case 6:
                     i++;
                     return [3 /*break*/, 3];
-                case 6:
+                case 7:
                     // Go to next inode
                     if (currInode.next === null)
-                        return [3 /*break*/, 8];
+                        return [3 /*break*/, 9];
                     return [4 /*yield*/, readInode(currInode.next)];
-                case 7:
+                case 8:
                     currInode = _a.sent();
                     return [3 /*break*/, 2];
-                case 8:
-                    newBuffer = new Uint8Array(size);
-                    newBuffer.set(buffer.subarray(0, size), 0);
-                    buffer = newBuffer;
-                    decoder = new TextDecoder();
-                    console.log("Read size:", buffer.length);
-                    fs_1.writeFileSync(filePath, decoder.decode(buffer));
+                case 9:
+                    // Close and report
+                    console.log("Read size:", bytesRead);
+                    fs.closeSync(fd);
                     return [2 /*return*/];
             }
         });
