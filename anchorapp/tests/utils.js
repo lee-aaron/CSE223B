@@ -36,6 +36,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 exports.__esModule = true;
+exports.downloadFile = exports.uploadFile = exports.setInode = exports.createInodeBlock = exports.setData = exports.createDataBlock = exports.readData = exports.readInode = void 0;
 var anchor = require("@project-serum/anchor");
 var fs = require("fs");
 var program = anchor.workspace.Anchorapp;
@@ -51,7 +52,7 @@ function readInode(inodeKey) {
                     state = _a.sent();
                     if (!state.isInode)
                         throw new TypeError("Not an inode");
-                    inodes = state.content['inode']['inodes'];
+                    inodes = state.content["inode"]["inodes"];
                     return [2 /*return*/, {
                             direct: inodes.slice(1, state.size + 1),
                             next: inodes[0]
@@ -71,7 +72,7 @@ function readData(datakey) {
                     state = _a.sent();
                     if (state.isInode)
                         throw new TypeError("Not a data block");
-                    rawData = state.content['data']['data'];
+                    rawData = state.content["data"]["data"];
                     size = state.size;
                     result = new Uint8Array(size);
                     result.set(rawData.slice(0, size), 0);
@@ -156,16 +157,15 @@ function setInode(blockKey, userKey, inode) {
     return __awaiter(this, void 0, void 0, function () {
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, program.methods
+                case 0:
+                    program.methods
                         .setDirectBlocks(inode.direct)
                         .accounts({
                         mySpace: blockKey.publicKey,
                         user: userKey
                     })
                         .signers([])
-                        .rpc()];
-                case 1:
-                    _a.sent();
+                        .rpc();
                     return [4 /*yield*/, program.methods
                             .setNextInodeBlock(inode.next)
                             .accounts({
@@ -174,7 +174,7 @@ function setInode(blockKey, userKey, inode) {
                         })
                             .signers([])
                             .rpc()];
-                case 2:
+                case 1:
                     _a.sent();
                     return [2 /*return*/];
             }
@@ -206,62 +206,54 @@ function writeBuffer(fd, buffer) {
 }
 function uploadFile(filePath, userKey) {
     return __awaiter(this, void 0, void 0, function () {
-        var fd, blockKeys, bytesWritten, blockKey, chunk, headInodeKey, currInodeKey, i, nextInodeKey, inode;
+        var fd, blockKeys, bytesWritten, blockKey, chunk, headInodeKey, currInodeKey, promises, i, nextInodeKey, inode;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    fd = fs.openSync(filePath, 'r');
+                    fd = fs.openSync(filePath, "r");
                     blockKeys = [];
                     bytesWritten = 0;
                     _a.label = 1;
                 case 1:
-                    if (!true) return [3 /*break*/, 4];
+                    if (!true) return [3 /*break*/, 3];
                     blockKey = anchor.web3.Keypair.generate();
                     return [4 /*yield*/, readBuffer(fd)];
                 case 2:
                     chunk = _a.sent();
                     // End of file reached
                     if (chunk.length === 0)
-                        return [3 /*break*/, 4];
+                        return [3 /*break*/, 3];
                     // console.log("Attempt to write", chunk.length, "bytes...");
                     process.stdout.write(".");
-                    return [4 /*yield*/, createDataBlock(blockKey, userKey, Buffer.from(chunk.buffer))];
-                case 3:
-                    _a.sent();
+                    createDataBlock(blockKey, userKey, Buffer.from(chunk.buffer));
                     bytesWritten += chunk.length;
                     // Add block pair
                     blockKeys.push(blockKey.publicKey);
                     return [3 /*break*/, 1];
-                case 4:
+                case 3:
                     fs.closeSync(fd);
                     if (blockKeys.length === 0)
                         throw RangeError("Empty file");
                     headInodeKey = null;
                     currInodeKey = anchor.web3.Keypair.generate();
-                    i = 0;
-                    _a.label = 5;
-                case 5:
-                    if (!(i < blockKeys.length)) return [3 /*break*/, 8];
-                    nextInodeKey = null;
-                    if (i + NUM_INODES - 1 < blockKeys.length)
-                        nextInodeKey = anchor.web3.Keypair.generate();
-                    inode = {
-                        direct: blockKeys.slice(i, Math.min(i + NUM_INODES - 1, blockKeys.length)),
-                        next: nextInodeKey == null ? null : nextInodeKey.publicKey
-                    };
-                    // console.log("Attempt to write inode", inode);
-                    return [4 /*yield*/, createInodeBlock(currInodeKey, userKey, inode)];
-                case 6:
-                    // console.log("Attempt to write inode", inode);
+                    promises = [];
+                    for (i = 0; i < blockKeys.length; i += NUM_INODES - 1) {
+                        nextInodeKey = null;
+                        if (i + NUM_INODES - 1 < blockKeys.length)
+                            nextInodeKey = anchor.web3.Keypair.generate();
+                        inode = {
+                            direct: blockKeys.slice(i, Math.min(i + NUM_INODES - 1, blockKeys.length)),
+                            next: nextInodeKey == null ? null : nextInodeKey.publicKey
+                        };
+                        // console.log("Attempt to write inode", inode);
+                        promises.push(createInodeBlock(currInodeKey, userKey, inode));
+                        if (headInodeKey === null)
+                            headInodeKey = currInodeKey.publicKey;
+                        currInodeKey = nextInodeKey;
+                    }
+                    return [4 /*yield*/, Promise.any(promises)];
+                case 4:
                     _a.sent();
-                    if (headInodeKey === null)
-                        headInodeKey = currInodeKey.publicKey;
-                    currInodeKey = nextInodeKey;
-                    _a.label = 7;
-                case 7:
-                    i += NUM_INODES - 1;
-                    return [3 /*break*/, 5];
-                case 8:
                     console.log("Write size:", bytesWritten);
                     return [2 /*return*/, headInodeKey];
             }
@@ -275,7 +267,7 @@ function downloadFile(filePath, inodeKey) {
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    fd = fs.openSync(filePath, 'w');
+                    fd = fs.openSync(filePath, "w");
                     return [4 /*yield*/, readInode(inodeKey)];
                 case 1:
                     currInode = _a.sent();

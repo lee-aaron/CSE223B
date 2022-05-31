@@ -1,14 +1,14 @@
 [features]
 seeds = false
 [programs.localnet]
-anchorapp = "6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn"
+anchorapp = "AB7UQ9XjLKKGYRuqZqb4ZXgVMEs3KpftkNsYLBfKohm3"
 
 [registry]
 url = "https://anchor.projectserum.com"
 
 [provider]
 cluster = "localnet"
-wallet = "~/.config/solana/id.json"
+wallet = "./tests/test-key.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

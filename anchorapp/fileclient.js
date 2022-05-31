@@ -8,8 +8,8 @@ const util = require("./tests/utils.js");
 const idl = JSON.parse(
   require("fs").readFileSync("./target/idl/anchorapp.json", "utf8")
 );
-// const programId = new anchor.web3.PublicKey("AB7UQ9XjLKKGYRuqZqb4ZXgVMEs3KpftkNsYLBfKohm3");
-const programId = new anchor.web3.PublicKey("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
+const programId = new anchor.web3.PublicKey("AB7UQ9XjLKKGYRuqZqb4ZXgVMEs3KpftkNsYLBfKohm3");
+// const programId = new anchor.web3.PublicKey("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
 
 // Configure the local cluster.
 const provider = anchor.AnchorProvider.local()
@@ -57,6 +57,27 @@ async function main() {
 // upload: 43.969s
 // Read size: 49155
 // download: 72.555ms
+
+/*
+
+Two Node Cluster
+
+...............................Write size: 30000
+upload: 25.720s
+...............................Read size: 30000
+download: 25.075ms
+
+.........................................Write size: 40000
+upload: 33.954s
+.........................................Read size: 40000
+download: 30.655ms
+
+...................................................Write size: 50000
+upload: 41.869s
+...................................................Read size: 50000
+download: 39.785ms
+
+*/
 
 console.log("Running client.");
 main().then(() => console.log("Success"));

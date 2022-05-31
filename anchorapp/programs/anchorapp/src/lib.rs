@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
-// declare_id!("AB7UQ9XjLKKGYRuqZqb4ZXgVMEs3KpftkNsYLBfKohm3");
-declare_id!("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
+declare_id!("AB7UQ9XjLKKGYRuqZqb4ZXgVMEs3KpftkNsYLBfKohm3");
+// declare_id!("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
 
 const DATA_SIZE: usize = 992;   // 1024-32
 const NUM_INODES: usize = 31;   // 992/32

@@ -1,4 +1,4 @@
-tsc ./tests/utils.ts
+yarn tsc ./tests/utils.ts
 node fileclient.js
 diff testfile testfile.out > /dev/null
 if [ $? -ne 0 ]; then
