@@ -1,10 +1,10 @@
 use anchor_lang::prelude::*;
 
-declare_id!("AB7UQ9XjLKKGYRuqZqb4ZXgVMEs3KpftkNsYLBfKohm3");
-// declare_id!("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
+// declare_id!("AB7UQ9XjLKKGYRuqZqb4ZXgVMEs3KpftkNsYLBfKohm3");
+declare_id!("6scwiUMW8MxfJdsXZG878DEm8dLh8ZDPNBezmC3HeZwn");
 
-const DATA_SIZE: usize = 992;
-const NUM_INODES: usize = 31;
+const DATA_SIZE: usize = 992;   // 1024-32
+const NUM_INODES: usize = 31;   // 992/32
 
 #[program]
 mod anchorapp {
@@ -29,22 +29,10 @@ mod anchorapp {
         ctx.accounts.my_space.set_data(data)
     }
 
-    pub fn get_data(ctx: Context<GetData>) -> Result<Vec<u8>> {
-        ctx.accounts.my_space.get_data()
-    }
-
     // Inode block operations
     pub fn create_inode_block(ctx: Context<CreateBlock>, claimer: Pubkey) -> Result<()> {
         require_keys_eq!(ctx.accounts.user.key(), claimer, SpaceError::NoProxyUser);
         ctx.accounts.my_space.create_block(claimer, true)
-    }
-
-    pub fn get_direct_blocks(ctx: Context<GetData>) -> Result<Vec<Pubkey>> {
-        ctx.accounts.my_space.get_direct_blocks()
-    }
-
-    pub fn get_next_inode_block(ctx: Context<GetData>) -> Result<Option<Pubkey>> {
-        ctx.accounts.my_space.get_next_inode_block()
     }
 
     pub fn set_direct_blocks(ctx: Context<SetData>, data_blocks: Vec<Pubkey>) -> Result<()> {
@@ -92,11 +80,6 @@ pub struct CreateBlock<'info> {
 }
 
 #[derive(Accounts)]
-pub struct GetData<'info> {
-    pub my_space: Box<Account<'info, Block>>
-}
-
-#[derive(Accounts)]
 pub struct SetData<'info> {
     #[account(mut)]
     pub my_space: Box<Account<'info, Block>>,
@@ -104,7 +87,7 @@ pub struct SetData<'info> {
 }
 
 impl Block {
-    pub const SIZE: usize = 32 + 1 + 2 + 1+DATA_SIZE + 4;
+    pub const SIZE: usize = 32 + 1 + 2 + (1+DATA_SIZE) + 20;
 
     pub fn create_block(&mut self, owner: Pubkey, is_inode: bool) -> Result<()> {
         self.owner = owner;
@@ -116,17 +99,6 @@ impl Block {
             self.content = Content::DATA{data: [0; DATA_SIZE]};
         }
         Ok(())
-    }
-
-    pub fn get_data(&self) -> Result<Vec<u8>> {
-        require!(!self.is_inode, SpaceError::NotDataBlock);
-        let mut result = vec!();
-
-        if let Content::DATA{data} = self.content {
-            result = data[..self.size as usize].to_vec();
-        }
-
-        Ok(result)
     }
 
     pub fn set_data(&mut self, new_data: Vec<u8>) -> Result<()> {
@@ -143,33 +115,6 @@ impl Block {
         Ok(())
     }
 
-    pub fn get_direct_blocks(&self) -> Result<Vec<Pubkey>> {
-        require!(self.is_inode, SpaceError::NotInodeBlock);
-
-        let mut result = vec!();
-        if let Content::INODE{inodes} = self.content {
-            let temp: Vec<Pubkey> = inodes[1..]
-                .into_iter()
-                .filter(|b| b.is_some())
-                .map(|b| b.unwrap())
-                .collect();
-            result = temp.to_vec();
-        }
-
-        Ok(result)
-    }
-
-    pub fn get_next_inode_block(&self) -> Result<Option<Pubkey>> {
-        require!(self.is_inode, SpaceError::NotInodeBlock);
-
-        let mut result: Option<Pubkey> = None;
-        if let Content::INODE{inodes} = self.content {
-            result = inodes[0];
-        }
-
-        Ok(result)
-    }
-
     pub fn set_direct_blocks(&mut self, new_inodes: Vec<Pubkey>) -> Result<()> {
         require!(self.is_inode, SpaceError::NotInodeBlock);
         require_gte!(NUM_INODES-1, new_inodes.len(), SpaceError::TooManyInodes);
@@ -180,11 +125,11 @@ impl Block {
                 .into_iter()
                 .map(|b| Some(b))
                 .collect();
-            self.size = (temp.len()+1) as u16;
+            self.size = temp.len() as u16;
             
             // preserve next block pointer
             result[0] = inodes[0];
-            result[1..self.size as usize].clone_from_slice(&temp);
+            result[1..(self.size+1) as usize].clone_from_slice(&temp);
 
             self.content = Content::INODE{inodes: result};
         }

@@ -2,7 +2,6 @@
 // It is not expected users directly test with this example. For a more
 // ergonomic example, see `tests/basic-0.js` in this workspace.
 
-const assert = require("assert");
 const anchor = require("@project-serum/anchor");
 const util = require("./tests/utils.js");
 
@@ -17,24 +16,27 @@ const provider = anchor.AnchorProvider.local()
 anchor.setProvider(provider);
 
 async function main() {
-  // #region code-simplified
-  // The program to execute.
+  // const dataKeyPair = anchor.web3.Keypair.generate();
   const program = new anchor.Program(idl, programId);
+  const user = program.provider.wallet;
 
-  const dataKeyPair = anchor.web3.Keypair.generate();
-  const claimer = program.provider.wallet;
+  // Upload file
+  console.time("upload");
+  var inode = await util.uploadFile("testfile", user.publicKey);
+  console.timeEnd("upload");
+  console.log("Uploaded file with head inode at:", inode.toString());
 
-  // Claim space
-  await util.createInodeBlock(dataKeyPair, claimer.publicKey);
-  
-  // Update message
-  let accounts = Array(5).fill(anchor.web3.Keypair.generate().publicKey);
-  let inode = {direct: accounts, next: null};
-  await util.setInodes(dataKeyPair, claimer.publicKey, inode);
-
-  let result = await util.readInodes(dataKeyPair);
-  console.log(result);
+  // Download file
+  console.time("download");
+  await util.downloadFile("testfile.out", inode);
+  console.timeEnd("download");
 }
+
+// Report:
+// Write size: 24577
+// upload: 22.290s
+// Read size: 24577
+// download: 29.71ms
 
 console.log("Running client.");
 main().then(() => console.log("Success"));
