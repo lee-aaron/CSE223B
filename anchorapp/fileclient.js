@@ -58,26 +58,5 @@ async function main() {
 // Read size: 49155
 // download: 72.555ms
 
-/*
-
-Two Node Cluster
-
-...............................Write size: 30000
-upload: 25.720s
-...............................Read size: 30000
-download: 25.075ms
-
-.........................................Write size: 40000
-upload: 33.954s
-.........................................Read size: 40000
-download: 30.655ms
-
-...................................................Write size: 50000
-upload: 41.869s
-...................................................Read size: 50000
-download: 39.785ms
-
-*/
-
 console.log("Running client.");
 main().then(() => console.log("Success"));

@@ -15,3 +15,7 @@ This folder contains files to run a Solana network privately
 `solana-test-validator` should run after exporting the METRICS_CONFIG env vars
 
 Go to `localhost:3000`
+
+## Adding more Validators
+
+`solana-test-validator --faucet-port 8891 --dynamic-port-range 6000-6020 --rpc-port 5555 -l ledger2`
