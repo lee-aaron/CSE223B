@@ -152,6 +152,7 @@ export async function uploadFile(
   var blockKeys: PubKey[] = [];
   var bytesWritten = 0;
 
+  let promises = [];
   while (true) {
     var blockKey = anchor.web3.Keypair.generate();
     var chunk = await readBuffer(fd);
@@ -161,7 +162,7 @@ export async function uploadFile(
 
     // console.log("Attempt to write", chunk.length, "bytes...");
     process.stdout.write(".");
-    createDataBlock(blockKey, userKey, Buffer.from(chunk.buffer));
+    promises.push(createDataBlock(blockKey, userKey, Buffer.from(chunk.buffer)));
     bytesWritten += chunk.length;
 
     // Add block pair
@@ -174,8 +175,6 @@ export async function uploadFile(
   // Then write inodes
   var headInodeKey: PubKey = null;
   var currInodeKey: KeyPair = anchor.web3.Keypair.generate();
-
-  let promises = [];
 
   for (var i = 0; i < blockKeys.length; i += NUM_INODES - 1) {
     var nextInodeKey: KeyPair = null;
@@ -196,7 +195,7 @@ export async function uploadFile(
     currInodeKey = nextInodeKey;
   }
 
-  await Promise.any(promises);
+  await Promise.all(promises);
 
   console.log("Write size:", bytesWritten);
   return headInodeKey;
